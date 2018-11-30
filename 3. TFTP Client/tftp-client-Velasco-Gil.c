@@ -27,15 +27,13 @@ int main(int argc, char *argv[])
     if (argc < 4 || argc > 5) {
         printf("Número de argumentos no válido.\n");
         exit(1);
-    } else {
-        if (argc == 5)  {
-            // Si hay un cuarto argumento, debe ser V.
-            if (strcmp(argv[4], "-v") == 0) {
-                argV = 1;
-            } else {
-                printf("El cuarto argumento, en caso de haber, debe ser [-v].\n");
-                exit(1);
-            }
+    } else if (argc == 5)  {
+        // Si hay un cuarto argumento, debe ser V.
+        if (strcmp(argv[4], "-v") == 0) {
+            argV = 1;
+        } else {
+            printf("El cuarto argumento, en caso de haber, debe ser [-v].\n");
+            exit(1);
         }
     }
 
@@ -62,7 +60,7 @@ int main(int argc, char *argv[])
     // -- SERVER SIDE --
     struct sockaddr_in serverID;
     struct servent *server;
-    // Obtenemos la direccion IP del servidor
+    // Obtenemos la direccion IP del servidor.
     if (inet_aton(argv[1], &serverID.sin_addr) == -1){
         perror("FAIL: No se pudo obtener la direccion IP del servidor.\n");
         exit(0);
@@ -83,6 +81,22 @@ int main(int argc, char *argv[])
         printf("FAIL: No se ha especificado bien si es lectura [-r] o escritura [-w]");
         exit(0);
     }
+
+    // Cadenas y puntero necesarios:
+    char pack[MAXDATASIZE]; // Datagrama para enviar y recibir bloques.
+    char stringError[MAXDATASIZE] = ""; // Cadena con el mensaje de error. 
+    FILE *file; // Fichero recibido o enviado.
+
+
+    // Variables de control:
+    int firstBlock  = 1;    // Comprobación inicial de si es el primer bloque.
+    int block    = 0;       // Bloque usado.
+    int rcvBlock;           // Bloque recibido.
+    int operationCode;      // Número de operacion = {01, 02, 03, 04, 05}
+    int errorCode;          // Número de error = {1, ..., 6}
+
+
+
 
 
 
