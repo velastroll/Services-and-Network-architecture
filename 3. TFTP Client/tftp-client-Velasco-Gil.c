@@ -20,16 +20,16 @@
 int main(int argc, char *argv[])
 {
 
-    // 1 : activado - 2 : desactivado
+    // COMPROBACION 1: Numero de parametros aceptable.
+    // argV = {1 : activado, 2 : desactivado}
     int argV = 0;
 
-    // COMPROBACION 1: Numero de parametros aceptable.
     if (argc < 4 || argc > 5) {
         printf("Número de argumentos no válido.\n");
         exit(1);
     } else {
         if (argc == 5)  {
-            // Si hay un cuarto argumento, debe ser V,
+            // Si hay un cuarto argumento, debe ser V.
             if (strcmp(argv[4], "-v") == 0) {
                 argV = 1;
             } else {
@@ -83,9 +83,6 @@ int main(int argc, char *argv[])
         printf("FAIL: No se ha especificado bien si es lectura [-r] o escritura [-w]");
         exit(0);
     }
-    
-
-
 
 
 
