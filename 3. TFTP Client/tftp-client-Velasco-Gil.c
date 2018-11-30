@@ -93,9 +93,29 @@ int main(int argc, char *argv[])
     int block    = 0;       // Bloque usado.
     int rcvBlock;           // Bloque recibido.
     int operationCode;      // Número de operacion = {01, 02, 03, 04, 05}
-    int errorCode;          // Número de error = {1, ..., 6}
+    int errorCode;          // Número de error = {1, ..., 7}
+    int packSize;           // Tamaño de paquete a enviar.
 
+    // Iniciamos el modo lectura:
+    if (row==0){
+        // Construimos la pedición de lectura RRQ:
+        // peticion = 01filenameoctet
+        pack[0] = 0;    pack[1] = 1;    // 01
+        strcpy(pack + 2, argv[3]);      // 01filename
+        strcpy(pack + (strlen(argv[3]) + 3), "0");      // 01filename0
+        strcpy(pack + (strlen(argv[3]) + 4), "octet");  // 01filename0octet
+        strcpy(pack + (strlen(argv[3]) + 10), "0");     // 01filename0octet0
 
+        // Abrimos el archivo de datos a enviar:
+        if ((file = fopen(argv[3], "w")) == NULL){
+            perror("FAIL: No se pudo abrir el fichero.\n");
+            exit(0);
+        }
+
+        // Calculamos el tamaño del paquete que vamos a leer:
+        packSize = 2 + strlen(argv[3]) + 1 + strlen("octet") + 1;
+    
+    }
 
 
 
