@@ -94,8 +94,8 @@ int main(int argc, char *argv[])
     int errorCode;          // Número de error = {1, ..., 7}
     int packSize;           // Tamaño de paquete a enviar.
 
-    // -----  Iniciamos el modo lectura   -----
-    if (row==0){
+    // -----    Iniciamos el modo LECTURA   -----
+    if (row == 0) {
         // Construimos la pedición de lectura RRQ:
         // peticion = 01filenameoctet
         pack[0] = 0;    pack[1] = 1;    // 01
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
             exit(0);
         }
 
-        // Calculamos el tamaño del paquete con la petición:
+        // Calculamos el tamaño del datagrama UDP como petición:
         packSize = 2 + strlen(argv[3]) + 1 + strlen("octet") + 1;
 
         // Enviamos la petición:
@@ -225,50 +225,153 @@ int main(int argc, char *argv[])
 
             // Cambiamos el número de bloque esperado en el siguiente ciclo:
             block++;
-        }
-
-
+        }  
     }
 
+    // -----   Iniciamos el modo ESCRITURA  -----
+    else if (row == 1) {
+        // Construimos la petición de escritura WRQ: 02filename0octet0
+        pack[0] = 0;    pack[1] = 2;
+        strcpy(pack + 2, argv[3]);      // 02filename
+        strcpy(pack + (strlen(argv[3]) + 3), "0");      // 02filename0
+        strcpy(pack + (strlen(argv[3]) + 4), "octet");  // 02filename0octet
+        strcpy(pack + (strlen(argv[3]) + strlen("octet") + 5), "0");     // 02filename0octet0
 
+        // tamaño del datagrama
+        int datSize = 2 + strlen(argv[3]) + 1 + strlen("octet") + 1;   // 02filename0octet0
+        
+        // Enviamos la petición:
+        if (sendto(socketClient, pack, sizeof(char) * datSize, 0, (struct sockaddr*) &serverID, sizeof(serverID)) == -1) {
+            perror("FAIL: No se pudo enviar la petición al servidor.\n");
+            exit(0);
+        }
 
+        // Si se solicitó [-v], imprimimos información sobre la petición:
+        if (argV == 1) {
+            printf("Enviada solicitud de lectura de %s a servidor tftp en %s.", argv[3], argv[1]);
+        }
 
+        // Abrimos el archivo de datos como lectura:
+        if ((file = fopen(argv[3], "r")) == NULL) {
+            perror("FAIL: No se pudo abrir el fichero.\n");
+            exit(0);
+        }
 
+        // Variables de control:
+        int rcvEnd = 0, size = 0;
+        while (rcvEnd == 0){
+            // Tratamos la respuesta ACK por parte del servidor:
+            socklen_t serverSize = sizeof(serverID);
+            if (( size = recvfrom(socketClient, pack, MAXDATASIZE, 0, (struct sockaddr *) &serverID, &serverSize)) == -1) {
+                perror("FAIL: No se recibió bien el ACK.\n");
+                exit(0);
+            } else if (argV == 1) {
+                // Mostramos información si introdujeron [-v]
+                printf("Recibido ACK del servidor tftp.\n");
+            }
+
+            // Comprobamos si es el primer ACK recibido.
+            if (block == 1 && argV == 1) {
+                printf("Es el primer ACK (número de ACK 1).\n");
+            } else if (argV == 1) {
+                printf("Es el ACK con codigo %d.\n", block);
+            }
+
+            // Comprobamos que el número del bloque recibido en el paquete es el mismo que el esperado.
+            rcvBlock = (unsigned char) pack[2] * 256 + (unsigned char) pack[3];
+            if (rcvBlock != block) {
+                printf("FAIL: Se recibió el bloque %d, mientras se esperaba el %d", rcvBlock, block);
+                exit(0);
+            }
+
+            // Comprobamos el tipo de operacion: 5 = error.
+            operationCode = pack[1];
+            if (operationCode == 5) {   // [05][errorCode][errorString][0]
+                errorCode = pack[3];
+                switch(errorCode){
+                    case 0 :
+                        printf("No definido: %s\n", &pack[4]);
+                        exit(0);
+                        break;
+                    case 1 :
+                        printf("Fichero no encontrado.\n");
+                        exit(0);
+                        break;
+                    case 2 :
+                        printf("Violación de acceso.\n");
+                        exit(0);
+                        break;
+                    case 3 :
+                        printf("Espacio de almacenamiento lleno.\n");
+                        exit(0);
+                        break;
+                    case 4 :
+                        printf("Operación TFTP ilegal.\n");
+                        exit(0);
+                        break;
+                    case 5 :
+                        printf("Identificador de transferencia desconocido.\n");
+                        exit(0);
+                        break;
+                    case 6 :
+                        printf("El fichero ya existe.\n");
+                        exit(0);
+                        break;
+                    case 7 :
+                        printf("Usuario desconocido.\n");
+                        exit(0);
+                        break;
+                }
+            }
+
+            // Formamos el paquete con los datos del archivo.
+            if (feof(file)) {
+
+                // Se ha terminado de recibir el archivo.
+                block--;
+
+                if (argV == 1){
+                    printf("El bloque %d era el ultimo: cerramos el fichero.\n", block);
+                }
+
+                //Cerramos fichero.
+                if(fclose(file)!=0){
+                    perror("FAIL: No se ha podido cerrar el fichero.\n");
+                    exit(0);
+                }
+
+                // Cerramos el bucle:
+                rcvEnd = 1;
+
+            } else {
+                // Todavía no se ha terminado de leer el archivo.
+                size = fread(pack + 4, sizeof(char), 512, file);
+            }
+
+            // Si no se ha acabado el bucle, enviamos el datagrama UDP.
+            if(rcvEnd != 1) {
+
+                // Formamos el datagrama a enviar:
+                pack[1] = 3;
+                pack[2] = (rcvBlock + 1) / 256;
+                pack[3] = (rcvBlock + 1) % 256;
+                datSize = 2 + 2 + size;
+
+                // Enviamos el datagrama al Servidor.
+                if(sendto(socketClient, pack, sizeof(char) * datSize, 0, (struct sockaddr*) &serverID, sizeof(serverID)) == -1) {
+                    perror("FAIL: No se pudo enviar el datagrama al servidor");
+                    exit(0);
+                } else if (argV == 1) {
+                    printf("Enviamos el bloque %d del fichero.\n", block);
+                }
+            }
+
+            // Preparamos las variables para el siguiente bucle:
+            block++;
+      }
+
+    // fin de escritura    
+    }
+
+// fin del main
 }
-// --------------------------------------------
-
-// El servidor está situado en 10.0.25.250
-// datos-cortos.dat = 100 Bytes
-// datos-justos.dat = 512 Bytes
-// datos-largos.dat = 12 345 678 Bytes
-
-//  servidor UDP
-//  tftp-client ip-servidor {-r|-w} archivo [-v]
-//  Si se incluye un modo visual, hay que mostrar por consola
-// todos los pasos de enviar y recibir paquetes y ACKs
-
-// -----    LECTURA DEL FICHERO     -----
-// datagrama de lectura:    RRQ
-//                          01filename0octet0
-
-// operation + filename0 + (octet)
-
-// Los nombres de los ficheros, como máx 100 caracteres.
-// El cliente solicita un fichero, el servidor comprueba si existe,
-// lo abre, y va enviando bloques.
-// Los paquetes tienen un numero de bloque, el primero es 1,
-// y cada paquete es de hasta 512 bytes.
-//          03numblockData
-// Cuando el cliente recibe paquete, responde un ACK con el número de bloque.
-//                                              04numblock
-// Cuando el servidor recibe el ACK X, envía paquete X+1
-// El último bloque tiene que ser menos a 512 bytes.
-// El servidor puede mandar un código de error: 05errcodeErrstring0
-
-// -----        ESCRITURA           -----
-// datagrama de escritura:  WRQ
-//                          02filename0octet0
-// Si esta permitida la escritura, envía al cliente un ACK con el bloque 0.
-// al recibirla el cliente, se pone a enviar paquetillos.
-// Cada paquete, el servidor responde con un ACK y el numero del paquete,
-// que al recibirlo el cliente, envia el siguiente paquete
