@@ -84,19 +84,17 @@ int main(int argc, char *argv[])
 
     // Cadenas y puntero necesarios:
     char pack[MAXDATASIZE]; // Datagrama para enviar y recibir bloques.
-    char stringError[MAXDATASIZE] = ""; // Cadena con el mensaje de error. 
     FILE *file; // Fichero recibido o enviado.
 
 
     // Variables de control:
-    int firstBlock  = 1;    // Comprobación inicial de si es el primer bloque.
-    int block    = 0;       // Bloque usado.
+    int block       = 1;    // Bloque usado.
     int rcvBlock;           // Bloque recibido.
     int operationCode;      // Número de operacion = {01, 02, 03, 04, 05}
     int errorCode;          // Número de error = {1, ..., 7}
     int packSize;           // Tamaño de paquete a enviar.
 
-    // Iniciamos el modo lectura:
+    // -----  Iniciamos el modo lectura   -----
     if (row==0){
         // Construimos la pedición de lectura RRQ:
         // peticion = 01filenameoctet
@@ -104,7 +102,7 @@ int main(int argc, char *argv[])
         strcpy(pack + 2, argv[3]);      // 01filename
         strcpy(pack + (strlen(argv[3]) + 3), "0");      // 01filename0
         strcpy(pack + (strlen(argv[3]) + 4), "octet");  // 01filename0octet
-        strcpy(pack + (strlen(argv[3]) + 10), "0");     // 01filename0octet0
+        strcpy(pack + (strlen(argv[3]) + strlen("octet") + 5), "0");     // 01filename0octet0
 
         // Abrimos el archivo de datos a enviar:
         if ((file = fopen(argv[3], "w")) == NULL){
@@ -112,9 +110,93 @@ int main(int argc, char *argv[])
             exit(0);
         }
 
-        // Calculamos el tamaño del paquete que vamos a leer:
+        // Calculamos el tamaño del paquete con la petición:
         packSize = 2 + strlen(argv[3]) + 1 + strlen("octet") + 1;
-    
+
+        // Enviamos la petición:
+        if (sendto(socketClient, pack, sizeof(char)*packSize, 0, (struct sockaddr*) &serverID, sizeof(serverID)) == -1) {
+            perror("FAIL: No se pudo enviar la petición al servidor.\n");
+            exit(0);
+        }
+
+        // Si se solicitó [-v], imprimimos información sobre la petición:
+        if (argV == 1) {
+            printf("Enviada solicitud de lectura de %s a servidor tftp en %s.", argv[3], argv[1]);
+        }
+
+        // Manejamos al respuesta por parte del servidor:
+        int rcvEnd = 0; // Controlador de bucle, al recibir el último, rcvEnd = 1;
+        int size;       // Tamaño del paquete recibido.
+        while(rcvEnd==0){
+            socklen_t serverSize = sizeof(serverID);
+            if ( (size = recvfrom(socketClient, pack, MAXDATASIZE, 0, (struct sockaddr *) &serverID, &serverSize)) == -1){
+                perror("FAIL: Error recibiendo el paquete del Servidor.\n");
+                exit(0);
+            } else if (argV == 1) {
+                printf("Recibido bloque del servidor tftp.\n");
+            }
+
+            // Comprobanos el número de bloque:
+            if (argV == 1) {
+                if (block == 1) {
+                    printf("Es el primer bloque (numero de bloque %d).\n", block);
+                } else {
+                    printf("Es el bloque con codigo $d.", block);
+                }
+            }
+
+            // Comprobamos que el número del bloque recibido en el paquete es el mismo que el esperado.
+            rcvBlock = (unsigned char) pack[2] * 256 + (unsigned char) pack[3];
+            if (rcvBlock != block) {
+                printf("FAIL: Se recibió el bloque %d, mientras se esperaba el %d", rcvBlock, block);
+                exit(0);
+            }
+
+            // Comprobamos el tipo de operacion: 5 = error.
+            operationCode = pack[1];
+            if (operationCode == 5) {   // [05][errorCode][errorString][0]
+                errorCode = pack[3];
+                switch(errorCode){
+                    case 0 :
+                        printf("No definido: %s\n", &pack[4]);
+                        exit(0);
+                        break;
+                    case 1 :
+                        printf("Fichero no encontrado.\n");
+                        exit(0);
+                        break;
+                    case 2 :
+                        printf("Violación de acceso.\n");
+                        exit(0);
+                        break;
+                    case 3 :
+                        printf("Espacio de almacenamiento lleno.\n");
+                        exit(0);
+                        break;
+                    case 4 :
+                        printf("Operación TFTP ilegal.\n");
+                        exit(0);
+                        break;
+                    case 5 :
+                        printf("Identificador de transferencia desconocido.\n");
+                        exit(0);
+                        break;
+                    case 6 :
+                        printf("El fichero ya existe.\n");
+                        exit(0);
+                        break;
+                    case 7 :
+                        printf("Usuario desconocido.\n");
+                        exit(0);
+                        break;
+                }
+            }
+
+
+            // Enviamos el ACK de 
+        }
+
+
     }
 
 
