@@ -192,8 +192,39 @@ int main(int argc, char *argv[])
                 }
             }
 
+            // Escribimos los datos recibidos en el fichero
+            fwirte(pack+4, sizeof(char), size-4, file);
 
-            // Enviamos el ACK de 
+            // Respondemos al servidor con un ACK con el número de bloque.
+            // Como el paquete recibido, incluye en los bytes 2 y 3 el número de bloque,
+            // lo reutilizamos como ACK cambiando solo el número de operacion:
+            pack[0] = 0;    pack[1] = 4;
+            int sizeACK = 4;
+            // Respondemos al servidor con el ACK
+            if (sendto(socketClient, pack, sizeACK, 0, (struct sockaddr*) &serverID, sizeof(serverID)) == -1) {
+                perror("FAIL: No se pudo enviar el ACK al servidor.\n");
+                exit(0);
+            }
+            if (argV == 1) {
+                printf("Enviamos el ACK del bloque %d.\n", block);
+            }
+            
+            // En caso de haber recibido el último bloque, finalizamos:
+            if (size < MAXDATASIZE) {
+                if (argV == 1) {
+                    printf("El bloque %d era el ultimo: cerramos el fichero.\n", block);
+                }
+
+                // Cambiamos al condición de bucle y cerramos el fichero:
+                rcvEnd = 1;
+                if (fclose(file) == 1) {
+                    perror("FAIL: No se pudo cerrar el fichero.\n");
+                    exit(0);
+                }
+            }
+
+            // Cambiamos el número de bloque esperado en el siguiente ciclo:
+            block++;
         }
 
 
