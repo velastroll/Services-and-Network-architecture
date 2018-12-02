@@ -280,8 +280,6 @@ int main(int argc, char *argv[])
                 printf("Numero de bloque recibido descolocado, tocaba el bloque %d y se recibio %d \n", block, rcvBlock);
                 exit(0);
             }
-            //Aumentamos en 1 el bloque esperado.
-            block++;
             //Obtenemos el codigo de operacion del datagrama recibido.
             operationCode = pack[1];
             //Comprobacion de error
