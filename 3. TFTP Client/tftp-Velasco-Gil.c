@@ -280,8 +280,6 @@ int main(int argc, char *argv[])
                 printf("Numero de bloque recibido descolocado, tocaba el bloque %d y se recibio %d \n", block, rcvBlock);
                 exit(0);
             }
-            //Aumentamos en 1 el bloque esperado.
-            block++;
             //Obtenemos el codigo de operacion del datagrama recibido.
             operationCode = pack[1];
             //Comprobacion de error
@@ -326,8 +324,6 @@ int main(int argc, char *argv[])
             if (feof(file)) {
 
                 // Se ha terminado de recibir el archivo.
-                block--;
-
                 if (argV == 1){
                     printf("El bloque %d era el ultimo: cerramos el fichero.\n", block);
                 }
