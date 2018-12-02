@@ -322,39 +322,50 @@ int main(int argc, char *argv[])
                         break;
                 }
             }
-            //Creamos el datagrama a enviar con los datos del fichero.
-            if (!feof(file)) {
-                //Fichero aun no leido completamente
-                //Obtemos el tamaño de lectura del fichero e introducimos los datos en el datagrama.
-                size = fread(pack + 4, sizeof(char), 512, file);
-            } else {
-                //Fichero completado, acabar.
-                block = block-1;
-                if(argV == 1){
+            // Formamos el paquete con los datos del archivo.
+            if (feof(file)) {
+
+                // Se ha terminado de recibir el archivo.
+                block--;
+
+                if (argV == 1){
                     printf("El bloque %d era el ultimo: cerramos el fichero.\n", block);
                 }
-                rcvEnd = 1;
+
                 //Cerramos fichero.
-                if (fclose(file) != 0){
-                    perror("fclose()");
+                if(fclose(file)!=0){
+                    perror("FAIL: No se ha podido cerrar el fichero.\n");
                     exit(0);
                 }
+
+                // Cerramos el bucle:
+                rcvEnd = 1;
+
+            } else {
+                // Todavía no se ha terminado de leer el archivo.
+                size = fread(pack + 4, sizeof(char), 512, file);
             }
-            //Creamos paquete enviar datagrama sin no hay orden de finalizacion de bucle.
-            if(rcvEnd != 1){
-                pack[1]=3;
-                pack[2]=(rcvBlock + 1) / 256;
-                pack[3]=(rcvBlock+1) % 256;
+
+            // Si no se ha acabado el bucle, enviamos el datagrama UDP.
+            if(rcvEnd != 1) {
+
+                // Formamos el datagrama a enviar:
+                pack[1] = 3;
+                pack[2] = (rcvBlock + 1) / 256;
+                pack[3] = (rcvBlock + 1) % 256;
                 datSize = 2 + 2 + size;
-                //Enviamos el correspondiente datagrama.
+
+                // Enviamos el datagrama al Servidor.
                 if(sendto(socketClient, pack, sizeof(char) * datSize, 0, (struct sockaddr*) &serverID, sizeof(serverID)) == -1) {
-                    perror("sendto()");
+                    perror("FAIL: No se pudo enviar el datagrama al servidor");
                     exit(0);
-                }
-                if(argV == 1){
+                } else if (argV == 1) {
                     printf("Enviamos el bloque %d del fichero.\n", block);
                 }
             }
+
+            // Preparamos las variables para el siguiente bucle:
+            block++;
         // fin de bucle
         }
 
