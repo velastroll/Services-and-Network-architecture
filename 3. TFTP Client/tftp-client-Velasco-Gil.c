@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
     } else if (strcmp(argv[2], "-w") == 0) {
         row = 1;
     } else {
-        printf("FAIL: No se ha especificado bien si es lectura [-r] o escritura [-w].\n");
+        printf("FAIL: No se ha especificado bien si es lectura [-r] o escritura [-w]");
         exit(0);
     }
 
@@ -93,16 +93,16 @@ int main(int argc, char *argv[])
     int operationCode;      // Número de operacion = {01, 02, 03, 04, 05}
     int errorCode;          // Número de error = {1, ..., 7}
     int packSize;           // Tamaño de paquete a enviar.
-    //Se guarda el nombre del fichero
-    char filename[100];
-    strcpy(filename, argv[3]);
 
     // -----    Iniciamos el modo LECTURA   -----
     if (row == 0) {
-        // Construimos la petición de lectura RRQ.
-        pack[0]=0;  pack[1]=1;  // Read = 01
-        strcpy(&pack[2], filename);                 // Se añade el nombre del fichero
-        strcpy(&pack[strlen(filename)+3],"octet");  // Se añade el modo "octet"
+        // Construimos la pedición de lectura RRQ:
+        // peticion = 01filenameoctet
+        pack[0] = 0;    pack[1] = 1;    // 01
+        strcpy(pack + 2, argv[3]);      // 01filename
+        strcpy(pack + (strlen(argv[3]) + 3), "0");      // 01filename0
+        strcpy(pack + (strlen(argv[3]) + 4), "octet");  // 01filename0octet
+        strcpy(pack + (strlen(argv[3]) + strlen("octet") + 5), "0");     // 01filename0octet0
 
         // Abrimos el archivo de datos a enviar:
         if ((file = fopen(argv[3], "w")) == NULL){
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 
         // Si se solicitó [-v], imprimimos información sobre la petición:
         if (argV == 1) {
-            printf("Enviada solicitud de lectura de %s a servidor tftp en %s.\n", argv[3], argv[1]);
+            printf("Enviada solicitud de lectura de %s a servidor tftp en %s.", argv[3], argv[1]);
         }
 
         // Manejamos al respuesta por parte del servidor:
@@ -141,14 +141,14 @@ int main(int argc, char *argv[])
                 if (block == 1) {
                     printf("Es el primer bloque (numero de bloque %d).\n", block);
                 } else {
-                    printf("Es el bloque con codigo %d.\n", block);
+                    printf("Es el bloque con codigo $d.", block);
                 }
             }
 
             // Comprobamos que el número del bloque recibido en el paquete es el mismo que el esperado.
             rcvBlock = (unsigned char) pack[2] * 256 + (unsigned char) pack[3];
             if (rcvBlock != block) {
-                printf("FAIL: Se recibió el bloque %d, mientras se esperaba el %d.\n", rcvBlock, block);
+                printf("FAIL: Se recibió el bloque %d, mientras se esperaba el %d", rcvBlock, block);
                 exit(0);
             }
 
@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
             }
 
             // Escribimos los datos recibidos en el fichero
-            fwrite(pack + 4, sizeof(char), size - 4, file);
+            fwrite(pack+4, sizeof(char), size - 4, file);
 
             // Respondemos al servidor con un ACK con el número de bloque.
             // Como el paquete recibido, incluye en los bytes 2 y 3 el número de bloque,
@@ -230,61 +230,62 @@ int main(int argc, char *argv[])
 
     // -----   Iniciamos el modo ESCRITURA  -----
     else if (row == 1) {
-        // Construimos la petición de escritura WRQ:
+        // Construimos la petición de escritura WRQ: 02filename0octet0
         pack[0] = 0;    pack[1] = 2;
-        strcpy(&pack[2], filename);                  // Se añade el nombre del fichero
-        strcpy(&pack[strlen(filename)+3], "octet");  // Se añade el modo "octet"
+        strcpy(pack + 2, argv[3]);      // 02filename
+        strcpy(pack + (strlen(argv[3]) + 3), "0");      // 02filename0
+        strcpy(pack + (strlen(argv[3]) + 4), "octet");  // 02filename0octet
+        strcpy(pack + (strlen(argv[3]) + strlen("octet") + 5), "0");     // 02filename0octet0
 
         // tamaño del datagrama
-        int datSize = 2 + strlen(argv[3]) + 1 + strlen("octet") + 1;
+        int datSize = 2 + strlen(argv[3]) + 1 + strlen("octet") + 1;   // 02filename0octet0
         
         // Enviamos la petición:
         if (sendto(socketClient, pack, sizeof(char) * datSize, 0, (struct sockaddr*) &serverID, sizeof(serverID)) == -1) {
             perror("FAIL: No se pudo enviar la petición al servidor.\n");
             exit(0);
-        } else if (argV == 1) {
-            // Si se solicitó [-v], imprimimos información sobre la petición:
-            printf("Enviada solicitud de escritura de %s a servidor tftp en %s.\n", argv[3], argv[1]);
+        }
+
+        // Si se solicitó [-v], imprimimos información sobre la petición:
+        if (argV == 1) {
+            printf("Enviada solicitud de lectura de %s a servidor tftp en %s.", argv[3], argv[1]);
         }
 
         // Abrimos el archivo de datos como lectura:
-        if ((file = fopen(argv[3], "w")) == NULL) {
+        if ((file = fopen(argv[3], "r")) == NULL) {
             perror("FAIL: No se pudo abrir el fichero.\n");
             exit(0);
         }
 
         // Variables de control:
         int rcvEnd = 0, size = 0;
-        block=0;
-
-        while (rcvEnd == 0){      //Recibimos ACK del server
-            socklen_t longserv = sizeof(serverID);
-            if((size = recvfrom(socketClient, pack, MAXDATASIZE, 0, (struct sockaddr *) &serverID, &longserv)) == -1) {
-                perror("recvfrom()");
+        while (rcvEnd == 0){
+            // Tratamos la respuesta ACK por parte del servidor:
+            socklen_t serverSize = sizeof(serverID);
+            if (( size = recvfrom(socketClient, pack, MAXDATASIZE, 0, (struct sockaddr *) &serverID, &serverSize)) == -1) {
+                perror("FAIL: No se recibió bien el ACK.\n");
                 exit(0);
-            }
-            if (argV==1){
+            } else if (argV == 1) {
+                // Mostramos información si introdujeron [-v]
                 printf("Recibido ACK del servidor tftp.\n");
-
             }
-            //Es el primer ACK que recibimos
-            if(block==0 && argV==1){
-                printf("Es el primer ACK (numero de bloque 0). \n");
-            } else if(argV == 1){
-                //No es el primer ACK recibido
+
+            // Comprobamos si es el primer ACK recibido.
+            if (block == 1 && argV == 1) {
+                printf("Es el primer ACK (número de ACK 1).\n");
+            } else if (argV == 1) {
                 printf("Es el ACK con codigo %d.\n", block);
             }
-            //Calculamos el numero de bloque del ACK recibido
+
+            // Comprobamos que el número del bloque recibido en el paquete es el mismo que el esperado.
             rcvBlock = (unsigned char) pack[2] * 256 + (unsigned char) pack[3];
-            if(rcvBlock != block){
-                printf("Numero de bloque recibido descolocado, tocaba el bloque %d y se recibio %d \n", block, rcvBlock);
+            if (rcvBlock != block) {
+                printf("FAIL: Se recibió el bloque %d, mientras se esperaba el %d", rcvBlock, block);
                 exit(0);
             }
-            //Aumentamos en 1 el bloque esperado.
-            block++;
-            //Obtenemos el codigo de operacion del datagrama recibido.
+
+            // Comprobamos el tipo de operacion: 5 = error.
             operationCode = pack[1];
-            //Comprobacion de error
             if (operationCode == 5) {   // [05][errorCode][errorString][0]
                 errorCode = pack[3];
                 switch(errorCode){
@@ -322,47 +323,55 @@ int main(int argc, char *argv[])
                         break;
                 }
             }
-            //Creamos el datagrama a enviar con los datos del fichero.
-            if (!feof(file)) {
-                //Fichero aun no leido completamente
-                //Obtemos el tamaño de lectura del fichero e introducimos los datos en el datagrama.
-                size = fread(pack + 4, sizeof(char), 512, file);
-            } else {
-                //Fichero completado, acabar.
-                block = block-1;
-                if(argV == 1){
+
+            // Formamos el paquete con los datos del archivo.
+            if (feof(file)) {
+
+                // Se ha terminado de recibir el archivo.
+                block--;
+
+                if (argV == 1){
                     printf("El bloque %d era el ultimo: cerramos el fichero.\n", block);
                 }
-                rcvEnd = 1;
+
                 //Cerramos fichero.
-                if (fclose(file) != 0){
-                    perror("fclose()");
+                if(fclose(file)!=0){
+                    perror("FAIL: No se ha podido cerrar el fichero.\n");
                     exit(0);
                 }
+
+                // Cerramos el bucle:
+                rcvEnd = 1;
+
+            } else {
+                // Todavía no se ha terminado de leer el archivo.
+                size = fread(pack + 4, sizeof(char), 512, file);
             }
-            //Creamos paquete enviar datagrama sin no hay orden de finalizacion de bucle.
-            if(rcvEnd != 1){
-                pack[1]=3;
-                pack[2]=(rcvBlock + 1) / 256;
-                pack[3]=(rcvBlock+1) % 256;
+
+            // Si no se ha acabado el bucle, enviamos el datagrama UDP.
+            if(rcvEnd != 1) {
+
+                // Formamos el datagrama a enviar:
+                pack[1] = 3;
+                pack[2] = (rcvBlock + 1) / 256;
+                pack[3] = (rcvBlock + 1) % 256;
                 datSize = 2 + 2 + size;
-                //Enviamos el correspondiente datagrama.
+
+                // Enviamos el datagrama al Servidor.
                 if(sendto(socketClient, pack, sizeof(char) * datSize, 0, (struct sockaddr*) &serverID, sizeof(serverID)) == -1) {
-                    perror("sendto()");
+                    perror("FAIL: No se pudo enviar el datagrama al servidor");
                     exit(0);
-                }
-                if(argV == 1){
+                } else if (argV == 1) {
                     printf("Enviamos el bloque %d del fichero.\n", block);
                 }
             }
-        // fin de bucle
-        }
+
+            // Preparamos las variables para el siguiente bucle:
+            block++;
+      }
 
     // fin de escritura    
     }
-
-    close(socketClient);
-    return 0;
 
 // fin del main
 }
